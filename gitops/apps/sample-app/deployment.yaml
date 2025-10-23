@@ -49,7 +49,7 @@ spec:
       
       containers:
       - name: app
-        image: k3d-apqx-platform-registry:5000/sample-app:latest
+        image: apqx-platform-registry:5000/sample-app:latest
         imagePullPolicy: IfNotPresent
         
         # Security: Container Security Context

@@ -1,12 +1,18 @@
 # Multi-stage build for security and smaller image size
 FROM python:3.11-slim AS builder
 
+# Install build dependencies for psutil
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
 # Install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Final stage
 FROM python:3.11-slim
@@ -17,8 +23,9 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Set working directory
 WORKDIR /app
 
-# Copy dependencies from builder
-COPY --from=builder /root/.local /home/appuser/.local
+# Copy dependencies from builder (to system python)
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY src/ .
@@ -29,9 +36,6 @@ RUN chown -R appuser:appuser /app
 # Security: Switch to non-root user
 USER appuser
 
-# Add local bin to PATH
-ENV PATH=/home/appuser/.local/bin:$PATH
-
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -41,9 +45,4 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8080/health')"
-
-# Run with gunicorn for production
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-", "app:app"]

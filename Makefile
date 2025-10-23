@@ -25,6 +25,24 @@ help: ## Show this help message
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 
+# Detect platform
+PLATFORM := $(shell uname -m)
+ifeq ($(PLATFORM),arm64)
+    DOCKER_PLATFORM := linux/arm64
+else ifeq ($(PLATFORM),aarch64)
+    DOCKER_PLATFORM := linux/arm64
+else
+    DOCKER_PLATFORM := linux/amd64
+endif
+
+build-app: ## Build and push application to local registry
+	@echo "$(GREEN)Building application for platform: $(DOCKER_PLATFORM)$(NC)"
+	@cd app && docker build --platform $(DOCKER_PLATFORM) -t apqx-platform-registry:5000/sample-app:latest .
+	@docker tag apqx-platform-registry:5000/sample-app:latest localhost:5000/sample-app:latest
+	@docker push localhost:5000/sample-app:latest
+	@echo "$(GREEN) Application built and pushed$(NC)"
+
+
 # ============================================================================
 # Main Commands
 # ============================================================================
@@ -34,17 +52,18 @@ up: ## 🚀 Bootstrap the entire platform (cluster + ArgoCD + apps)
 	@$(MAKE) cluster-create
 	@echo "$(GREEN)⏳ Waiting for cluster to be ready...$(NC)"
 	@sleep 10
+	@$(MAKE) build-app
 	@$(MAKE) argocd-install
 	@echo "$(GREEN)⏳ Waiting for ArgoCD to be ready...$(NC)"
 	@sleep 30
 	@$(MAKE) gitops-sync
-	@echo "$(GREEN)✅ Platform is ready!$(NC)"
+	@echo "$(GREEN) Platform is ready!$(NC)"
 	@$(MAKE) status
 
 down: ## 🔻 Destroy the entire platform
-	@echo "$(YELLOW)🔻 Destroying platform...$(NC)"
+	@echo "$(YELLOW) Destroying platform...$(NC)"
 	@$(MAKE) cluster-delete
-	@echo "$(GREEN)✅ Platform destroyed$(NC)"
+	@echo "$(GREEN) Platform destroyed$(NC)"
 
 restart: ## 🔄 Restart the platform (down + up)
 	@echo "$(YELLOW)🔄 Restarting platform...$(NC)"
