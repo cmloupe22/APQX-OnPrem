@@ -7,10 +7,16 @@ metadata:
     app: sample-app
     app.kubernetes.io/name: sample-app
   annotations:
-    # Traefik annotations
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # Traefik annotations - enable both HTTP and HTTPS
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # cert-manager will automatically create the TLS secret
+    cert-manager.io/cluster-issuer: selfsigned-issuer
 spec:
   ingressClassName: traefik
+  tls:
+  - hosts:
+    - app.127.0.0.1.sslip.io
+    secretName: sample-app-tls
   rules:
   - host: app.127.0.0.1.sslip.io
     http:

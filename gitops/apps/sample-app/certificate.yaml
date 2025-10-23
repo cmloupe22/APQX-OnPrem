@@ -1,0 +1,24 @@
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sample-app-tls
+  namespace: sample-app
+spec:
+  secretName: sample-app-tls
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - app.127.0.0.1.sslip.io
+    - "*.127.0.0.1.sslip.io"
+  commonName: app.127.0.0.1.sslip.io
+  duration: 8760h  # 1 year
+  renewBefore: 720h  # 30 days
