@@ -1,0 +1,35 @@
+apiVersion: tailscale.com/v1alpha1
+kind: Connector
+metadata:
+  name: sample-app-connector
+  namespace: sample-app
+spec:
+  hostname: sample-app
+  tags:
+    - tag:k8s
+    - tag:apqx-platform
+  
+  # Target the existing sample-app service
+  subnetRouter:
+    advertiseRoutes: []
+---
+# This will be handled by a Tailscale service instead
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-tailscale
+  namespace: sample-app
+  annotations:
+    tailscale.com/expose: "true"
+    tailscale.com/hostname: "sample-app"
+    tailscale.com/tags: "tag:k8s,tag:apqx-platform"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app: sample-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      name: http

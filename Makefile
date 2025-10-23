@@ -232,7 +232,7 @@ dev-build: ## 🔨 Build application Docker image locally
 	@echo "$(GREEN)Building application image...$(NC)"
 	@cd app && docker build -t localhost:$(REGISTRY_PORT)/sample-app:dev .
 	@docker push localhost:$(REGISTRY_PORT)/sample-app:dev
-	@echo "$(GREEN)✅ Image built and pushed to local registry$(NC)"
+	@echo "$(GREEN) Image built and pushed to local registry$(NC)"
 
 dev-watch: ## 👀 Watch for changes and redeploy
 	@echo "$(GREEN)Watching for changes...$(NC)"
@@ -240,3 +240,76 @@ dev-watch: ## 👀 Watch for changes and redeploy
 		inotifywait -r -e modify,create,delete app/ gitops/ 2>/dev/null || sleep 2; \
 		$(MAKE) dev-build && kubectl rollout restart deployment/sample-app -n $(APP_NAMESPACE); \
 	done
+
+# ============================================================================
+# Tailscale Integration
+# ============================================================================
+
+.PHONY: tailscale-setup tailscale-secret tailscale-deploy tailscale-status tailscale-logs tailscale-clean
+
+tailscale-setup: ## Complete Tailscale setup (interactive)
+	@echo "$(GREEN) Setting up Tailscale integration...$(NC)"
+	@read -p "Enter your Tailscale auth key (tskey-auth-...): " AUTH_KEY; \
+	$(MAKE) tailscale-secret AUTH_KEY=$$AUTH_KEY
+	@$(MAKE) tailscale-deploy
+	@echo "$(YELLOW) Waiting for Tailscale operator to be ready...$(NC)"
+	@sleep 15
+	@$(MAKE) tailscale-status
+
+tailscale-secret: ##  Create Tailscale OAuth secret
+	@if [ -z "$(AUTH_KEY)" ]; then \
+		echo "$(RED) Error: AUTH_KEY not provided$(NC)"; \
+		echo "Usage: make tailscale-secret AUTH_KEY=tskey-auth-xxxxx"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Creating Tailscale OAuth secret...$(NC)"
+	@kubectl create namespace tailscale --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl create secret generic operator-oauth \
+		--namespace=tailscale \
+		--from-literal=client_id=$(AUTH_KEY) \
+		--from-literal=client_secret=$(AUTH_KEY) \
+		--dry-run=client -o yaml | kubectl apply -f -
+	@echo "$(GREEN) Tailscale secret created$(NC)"
+
+tailscale-deploy: ## Deploy Tailscale operator and ingress via ArgoCD
+	@echo "$(GREEN) Deploying Tailscale operator...$(NC)"
+	@kubectl apply -f gitops/argocd/applications/tailscale-operator.yaml
+	@echo "$(GREEN) Applying extra RBAC permissions...$(NC)"
+	@kubectl apply -f gitops/argocd/applications/tailscale-rbac-extra.yaml
+	@echo "$(YELLOW) Waiting for operator to sync...$(NC)"
+	@kubectl wait --for=condition=Synced --timeout=300s \
+		application/tailscale-operator -n argocd 2>/dev/null || true
+	@echo "$(GREEN) Deploying Tailscale ingress...$(NC)"
+	@kubectl apply -f gitops/apps/sample-app/tailscale-ingress.yaml
+	@echo "$(GREEN) Tailscale deployment complete$(NC)"
+
+tailscale-status: ##  Check Tailscale status
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)    Tailscale Status$(NC)"
+	@echo "$(GREEN)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW) Tailscale Operator:$(NC)"
+	@kubectl get pods -n tailscale -l app.kubernetes.io/name=tailscale-operator 2>/dev/null || echo "  No operator pods found"
+	@echo ""
+	@echo "$(YELLOW) Tailscale Connector:$(NC)"
+	@kubectl get connector -n sample-app 2>/dev/null || echo "  No connectors found"
+	@echo ""
+	@echo "$(YELLOW) Tailscale Ingress Pods:$(NC)"
+	@kubectl get pods -n sample-app -l app=tailscale-ingress 2>/dev/null || echo "  No ingress pods found"
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(YELLOW) Next Steps:$(NC)"
+	@echo "  1. Visit: $(GREEN)https://login.tailscale.com/admin/machines$(NC)"
+	@echo "  2. Look for device named: $(GREEN)sample-app$(NC)"
+	@echo "  3. Access your app at: $(GREEN)https://sample-app.<your-tailnet>.ts.net$(NC)"
+	@echo ""
+
+tailscale-logs: ##  View Tailscale operator logs
+	@kubectl logs -n tailscale -l app.kubernetes.io/name=tailscale-operator --tail=50 -f
+
+tailscale-clean: ##  Remove Tailscale integration
+	@echo "$(YELLOW) Removing Tailscale integration...$(NC)"
+	@kubectl delete -f gitops/apps/sample-app/tailscale-ingress.yaml --ignore-not-found
+	@kubectl delete application tailscale-operator -n argocd --ignore-not-found
+	@kubectl delete namespace tailscale --ignore-not-found
+	@echo "$(GREEN) Tailscale removed$(NC)"
