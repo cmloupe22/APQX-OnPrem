@@ -49,9 +49,8 @@ spec:
       
       containers:
       - name: app
-        # TODO: Update this with actual image digest after first build
-        image: ghcr.io/cmloupe22/sample-app@sha256:0d0d9fef88b9644787d76131aea146f8d6763ff0f822dd117a6ec987d4b5d0c3
-        imagePullPolicy: Always
+        image: k3d-apqx-platform-registry:5000/sample-app:latest
+        imagePullPolicy: IfNotPresent
         
         # Security: Container Security Context
         securityContext:
