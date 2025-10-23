@@ -117,7 +117,7 @@ argocd-install: ## Install ArgoCD
 	@echo "$(GREEN)Installing ArgoCD...$(NC)"
 	@kubectl create namespace $(ARGOCD_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@kubectl apply -n $(ARGOCD_NAMESPACE) -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-	@echo "$(GREEN)⏳ Waiting for ArgoCD to be ready...$(NC)"
+	@echo "$(GREEN) Waiting for ArgoCD to be ready...$(NC)"
 	@kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n $(ARGOCD_NAMESPACE)
 	@kubectl wait --for=condition=available --timeout=300s deployment/argocd-repo-server -n $(ARGOCD_NAMESPACE)
 	@echo "$(GREEN) ArgoCD installed successfully$(NC)"
