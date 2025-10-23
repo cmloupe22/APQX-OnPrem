@@ -49,7 +49,8 @@ spec:
       
       containers:
       - name: app
-        image: ghcr.io/cmloupe22/sample-app@sha256:6c30e105647636299956c9280c137af74c440c553a60fee67663aa121cd08e94
+        # Local k3d registry for on-prem simulation
+        image: apqx-platform-registry:5000/sample-app:latest
         imagePullPolicy: IfNotPresent
         
         # Security: Container Security Context
@@ -74,9 +75,7 @@ spec:
         - name: APP_VERSION
           value: "1.0.0"
         - name: BUILD_SHA
-          value: "0f0d210423c84afc71eb3cc2788de86c12ca5a5e"
-          value: "69c4577ade60cba592c32e2ec06f850d1f2bb662"
-          value: "dev"  # Will be updated by CI
+          value: "dev"  # Will be updated by local builds
         - name: PORT
           value: "8080"
         - name: POD_NAME

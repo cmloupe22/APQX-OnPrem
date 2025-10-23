@@ -11,13 +11,9 @@ on:
     paths:
       - 'app/**'
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/sample-app
-
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  packages: read
   security-events: write
   id-token: write
 
@@ -57,16 +53,12 @@ jobs:
         name: codecov-umbrella
       continue-on-error: true
 
-  # Job 2: Build and Scan
+  # Job 2: Build and Scan (local only - no push to registry)
   build:
     name: Build and Scan Image
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push'
-    
-    outputs:
-      image_digest: ${{ steps.build.outputs.digest }}
-      image_tag: ${{ steps.meta.outputs.tags }}
     
     steps:
     - name: Checkout code
@@ -75,35 +67,15 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=raw,value=latest,enable={{is_default_branch}}
-    
-    - name: Build and push image
+    - name: Build image (no push - local registry only)
       id: build
       uses: docker/build-push-action@v5
       with:
         context: ./app
         file: ./app/Dockerfile
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        push: false
+        load: true
+        tags: sample-app:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         build-args: |
@@ -113,7 +85,7 @@ jobs:
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        image-ref: sample-app:${{ github.sha }}
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH'
@@ -127,50 +99,11 @@ jobs:
     - name: Run Trivy vulnerability scanner (Table)
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        image-ref: sample-app:${{ github.sha }}
         format: 'table'
         severity: 'CRITICAL,HIGH,MEDIUM'
 
-  # Job 3: Update GitOps Repository
-  update-gitops:
-    name: Update GitOps Manifests
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Update image in deployment
-      run: |
-        # Get the image digest
-        IMAGE_DIGEST="${{ needs.build.outputs.image_digest }}"
-        IMAGE_WITH_DIGEST="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${IMAGE_DIGEST}"
-        
-        # Update deployment.yaml with new image digest
-        sed -i "s|image:.*|image: ${IMAGE_WITH_DIGEST}|g" gitops/apps/sample-app/deployment.yaml
-        
-        # Update BUILD_SHA environment variable
-        sed -i "s|BUILD_SHA.*|BUILD_SHA\n          value: \"${{ github.sha }}\"|g" gitops/apps/sample-app/deployment.yaml
-    
-    - name: Commit and push changes
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        git add gitops/apps/sample-app/deployment.yaml
-        
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "chore: update sample-app image to ${{ github.sha }}"
-          git push
-        fi
-
-  # Job 4: Security Scan
+  # Job 3: Security Scan
   security:
     name: Security Checks
     runs-on: ubuntu-latest
@@ -205,7 +138,7 @@ jobs:
         head: HEAD
       continue-on-error: true
 
-  # Job 5: Manifest Validation
+  # Job 4: Manifest Validation
   validate:
     name: Validate Kubernetes Manifests
     runs-on: ubuntu-latest
