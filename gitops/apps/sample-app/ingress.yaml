@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sample-app
+  namespace: sample-app
+  labels:
+    app: sample-app
+    app.kubernetes.io/name: sample-app
+  annotations:
+    # Traefik annotations
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: app.127.0.0.1.sslip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sample-app
+            port:
+              number: 80

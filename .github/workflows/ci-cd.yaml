@@ -1,0 +1,237 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'app/**'
+      - '.github/workflows/ci-cd.yaml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/sample-app
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+  id-token: write
+
+jobs:
+  # Job 1: Test
+  test:
+    name: Test Application
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      working-directory: ./app
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run tests
+      working-directory: ./app
+      run: |
+        python -m pytest tests/ -v --cov=src --cov-report=xml --cov-report=term
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: ./app/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+      continue-on-error: true
+
+  # Job 2: Build and Scan
+  build:
+    name: Build and Scan Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
+      image_tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          BUILD_SHA=${{ github.sha }}
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+    
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+    
+    - name: Run Trivy vulnerability scanner (Table)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+  # Job 3: Update GitOps Repository
+  update-gitops:
+    name: Update GitOps Manifests
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Update image in deployment
+      run: |
+        # Get the image digest
+        IMAGE_DIGEST="${{ needs.build.outputs.image_digest }}"
+        IMAGE_WITH_DIGEST="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${IMAGE_DIGEST}"
+        
+        # Update deployment.yaml with new image digest
+        sed -i "s|image:.*|image: ${IMAGE_WITH_DIGEST}|g" gitops/apps/sample-app/deployment.yaml
+        
+        # Update BUILD_SHA environment variable
+        sed -i "s|BUILD_SHA.*|BUILD_SHA\n          value: \"${{ github.sha }}\"|g" gitops/apps/sample-app/deployment.yaml
+    
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        git add gitops/apps/sample-app/deployment.yaml
+        
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "chore: update sample-app image to ${{ github.sha }}"
+          git push
+        fi
+
+  # Job 4: Security Scan
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Checkov (IaC security)
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: gitops/
+        framework: kubernetes
+        output_format: sarif
+        output_file_path: checkov-results.sarif
+        quiet: true
+      continue-on-error: true
+    
+    - name: Upload Checkov results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: checkov-results.sarif
+      continue-on-error: true
+    
+    - name: Check for secrets in code
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: ${{ github.event.repository.default_branch }}
+        head: HEAD
+      continue-on-error: true
+
+  # Job 5: Manifest Validation
+  validate:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: 'v1.28.0'
+    
+    - name: Validate manifests
+      run: |
+        for file in $(find gitops/apps -name "*.yaml" -type f); do
+          echo "Validating $file"
+          kubectl apply --dry-run=client -f "$file"
+        done
+    
+    - name: Install kubeconform
+      run: |
+        wget https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
+        tar xzf kubeconform-linux-amd64.tar.gz
+        sudo mv kubeconform /usr/local/bin/
+    
+    - name: Validate with kubeconform
+      run: |
+        kubeconform -summary -output json gitops/apps/sample-app/*.yaml
