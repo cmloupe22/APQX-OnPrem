@@ -94,6 +94,6 @@ def test_index_response_format(client):
     assert 'namespace' in data['pod']
     assert 'node' in data['pod']
     
-    # Check timestamp format (ISO 8601)
+    # Check timestamp format
     assert 'T' in data['timestamp']
     assert data['timestamp'].endswith('Z')

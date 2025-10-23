@@ -42,14 +42,14 @@ echo ""
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo -e "${RED}❌ Docker is not installed!${NC}"
+    echo -e "${RED Docker is not installed!${NC}"
     echo -e "${YELLOW}Please install Docker first:${NC}"
     echo "  macOS: https://docs.docker.com/desktop/install/mac-install/"
     echo "  Linux: https://docs.docker.com/engine/install/"
     echo "  Windows: https://docs.docker.com/desktop/install/windows-install/"
     exit 1
 else
-    echo -e "${GREEN}✅ Docker is installed${NC}"
+    echo -e "${GREEN} Docker is installed${NC}"
 fi
 
 # Create bin directory
@@ -75,7 +75,7 @@ fi
 # Function to install kubectl
 install_kubectl() {
     if command -v kubectl &> /dev/null; then
-        echo -e "${GREEN}✅ kubectl already installed${NC}"
+        echo -e "${GREEN} kubectl already installed${NC}"
         return
     fi
     
@@ -85,13 +85,13 @@ install_kubectl() {
     chmod +x kubectl
     mv kubectl "$BIN_DIR/"
     
-    echo -e "${GREEN}✅ kubectl installed${NC}"
+    echo -e "${GREEN} kubectl installed${NC}"
 }
 
 # Function to install k3d
 install_k3d() {
     if command -v k3d &> /dev/null; then
-        echo -e "${GREEN}✅ k3d already installed${NC}"
+        echo -e "${GREEN} k3d already installed${NC}"
         return
     fi
     
@@ -109,13 +109,13 @@ install_k3d() {
         curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
     fi
     
-    echo -e "${GREEN}✅ k3d installed${NC}"
+    echo -e "${GREEN} k3d installed${NC}"
 }
 
 # Function to install helm
 install_helm() {
     if command -v helm &> /dev/null; then
-        echo -e "${GREEN}✅ helm already installed${NC}"
+        echo -e "${GREEN} helm already installed${NC}"
         return
     fi
     
@@ -123,13 +123,13 @@ install_helm() {
     
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
     
-    echo -e "${GREEN}✅ helm installed${NC}"
+    echo -e "${GREEN} helm installed${NC}"
 }
 
 # Function to install argocd CLI
 install_argocd_cli() {
     if command -v argocd &> /dev/null; then
-        echo -e "${GREEN}✅ argocd CLI already installed${NC}"
+        echo -e "${GREEN} argocd CLI already installed${NC}"
         return
     fi
     
@@ -145,7 +145,7 @@ install_argocd_cli() {
     
     chmod +x "$BIN_DIR/argocd"
     
-    echo -e "${GREEN}✅ argocd CLI installed${NC}"
+    echo -e "${GREEN} argocd CLI installed${NC}"
 }
 
 # Install all tools

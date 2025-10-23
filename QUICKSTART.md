@@ -72,11 +72,11 @@ make up
 ```
 
 This single command will:
-1. ✅ Create k3d cluster with 2 worker nodes
-2. ✅ Install Traefik ingress controller
-3. ✅ Install Argo CD
-4. ✅ Deploy sample application
-5. ✅ Configure ingress and DNS
+1.  Create k3d cluster with 2 worker nodes
+2.  Install Traefik ingress controller
+3.  Install Argo CD
+4.  Deploy sample application
+5.  Configure ingress and DNS
 
 **Expected time:** 3-5 minutes
 
@@ -101,10 +101,10 @@ make status
 ```
 
 You should see:
-- ✅ 2-3 nodes ready
-- ✅ All system pods running
-- ✅ Argo CD applications synced
-- ✅ Sample app pods running (2 replicas)
+- 2-3 nodes ready
+- All system pods running
+- Argo CD applications synced
+- Sample app pods running (2 replicas)
 
 ## Step 5: Access Applications
 
@@ -347,11 +347,11 @@ make argocd-ui
 
 ### Explore Features
 
-- 📊 **Monitoring:** Check `/metrics` endpoint
-- 🔒 **Security:** Review RBAC and pod security
-- 📈 **Scaling:** Test HPA with load
-- 🔄 **GitOps:** Make changes via Git
-- 🎯 **Argo CD:** Explore the UI
+-  **Monitoring:** Check `/metrics` endpoint
+-  **Security:** Review RBAC and pod security
+-  **Scaling:** Test HPA with load
+-  **GitOps:** Make changes via Git
+-  **Argo CD:** Explore the UI
 
 ### Advanced Topics
 
@@ -382,6 +382,4 @@ docker system prune -af
 
 ---
 
-**Congratulations! 🎉** You now have a fully functional GitOps platform running locally!
-
-Try making changes to the app and watch it automatically deploy through the GitOps pipeline.
+**Congratulations!** You now have a fully functional GitOps platform running locally!
