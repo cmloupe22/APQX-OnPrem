@@ -50,7 +50,7 @@ spec:
       containers:
       - name: app
         # TODO: Update this with actual image digest after first build
-        image: ghcr.io/YOUR_USERNAME/sample-app:latest
+        image: ghcr.io/cmloupe22/sample-app@sha256:0d0d9fef88b9644787d76131aea146f8d6763ff0f822dd117a6ec987d4b5d0c3
         imagePullPolicy: Always
         
         # Security: Container Security Context
@@ -75,6 +75,7 @@ spec:
         - name: APP_VERSION
           value: "1.0.0"
         - name: BUILD_SHA
+          value: "69c4577ade60cba592c32e2ec06f850d1f2bb662"
           value: "dev"  # Will be updated by CI
         - name: PORT
           value: "8080"
